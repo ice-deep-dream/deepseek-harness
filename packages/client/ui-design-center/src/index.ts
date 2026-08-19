@@ -177,12 +177,18 @@ function cwdFor(ctx: Context, sessionId: SessionId): string | undefined {
   return ctx.agents.get(sessionId)?.session.header.cwd
 }
 
+function emptyBoard(cwd: string): DesignResult<DesignBoard> {
+  return ok({ cwd, diagramsDir: DIAGRAMS_DIR, diagrams: [], plan: null, generatedAt: null })
+}
+
 async function readBoard(ctx: Context, sessionId: SessionId): Promise<DesignResult<DesignBoard>> {
   const cwd = cwdFor(ctx, sessionId)
   if (cwd === undefined) return fail('internal', 'session has no working directory')
 
   try {
     const dir = await ctx.fs.resolve(DIAGRAMS_DIR, { cwd })
+    const info = await ctx.fs.stat(dir)
+    if (info === undefined) return emptyBoard(cwd)
     const entries = await ctx.fs.listDir(dir)
     const jsonFiles = entries.filter(e => e.type === 'file' && e.name.toLowerCase().endsWith('.json'))
 
@@ -258,6 +264,9 @@ async function readBoard(ctx: Context, sessionId: SessionId): Promise<DesignResu
       generatedAt,
     })
   } catch (error) {
+    if (error instanceof Error && (error as { code?: string }).code === 'FS_NOT_FOUND') {
+      return emptyBoard(cwd)
+    }
     return fail('internal', error instanceof Error ? error.message : String(error))
   }
 }
