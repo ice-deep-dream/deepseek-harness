@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../locale" },
+    { "path": "../ui-conversation" },
+    { "path": "../runtime" },
+    { "path": "../ui-slots" },
+    { "path": "../ui-primitives" },
+    { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../../fs/fs" },
+    { "path": "../../shell/shell" },
+    { "path": "../../core/session" }
+  ]
+}
