@@ -86,10 +86,9 @@ export interface DesignRenderOutcome {
 }
 
 export type DesignError =
-  | { code: 'no-cwd'; message: string }
-  | { code: 'not-found'; message: string }
-  | { code: 'bad-request'; message: string }
-  | { code: 'render-failed'; message: string; details?: DesignRenderOutcome }
-  | { code: 'internal'; message: string }
+  | { code: 'internal'; message: string; details: Record<string, never> }
+  | { code: 'bad-request'; message: string; details: { issues: readonly unknown[] } }
+  | { code: 'command-error'; message: string; details: Record<string, never> }
+  | { code: 'directory-unreadable'; message: string; details: { path: string } }
 
 export type DesignResult<T> = { ok: true; value: T } | { ok: false; error: DesignError }

@@ -38,8 +38,12 @@ interface RenderArgs { readonly sessionId: SessionId; readonly targets?: readonl
 interface RpcEnvelope { readonly args?: Record<string, unknown> }
 
 function ok<T>(value: T): DesignResult<T> { return { ok: true, value } }
-function fail<T>(code: 'no-cwd' | 'not-found' | 'bad-request' | 'internal', message: string): DesignResult<T> {
-  return { ok: false, error: { code, message } }
+function fail<T>(
+  code: 'bad-request' | 'command-error' | 'directory-unreadable' | 'internal',
+  message: string,
+  details: Record<string, unknown> = {},
+): DesignResult<T> {
+  return { ok: false, error: { code, message, details: details as never } }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -175,7 +179,7 @@ function cwdFor(ctx: Context, sessionId: SessionId): string | undefined {
 
 async function readBoard(ctx: Context, sessionId: SessionId): Promise<DesignResult<DesignBoard>> {
   const cwd = cwdFor(ctx, sessionId)
-  if (cwd === undefined) return fail('no-cwd', 'session has no working directory')
+  if (cwd === undefined) return fail('internal', 'session has no working directory')
 
   try {
     const dir = await ctx.fs.resolve(DIAGRAMS_DIR, { cwd })
@@ -260,9 +264,9 @@ async function readBoard(ctx: Context, sessionId: SessionId): Promise<DesignResu
 
 async function writeSpec(ctx: Context, args: WriteSpecArgs): Promise<DesignResult<{ written: true }>> {
   const cwd = cwdFor(ctx, args.sessionId)
-  if (cwd === undefined) return fail('no-cwd', 'session has no working directory')
+  if (cwd === undefined) return fail('internal', 'session has no working directory')
   const id = args.id.replace(/[^a-zA-Z0-9._-]/g, '')
-  if (!id) return fail('bad-request', 'invalid diagram id')
+  if (!id) return fail('bad-request', 'invalid diagram id', { issues: [] })
   try {
     const target = await ctx.fs.resolve(`${DIAGRAMS_DIR}/${id}.json`, { cwd })
     await ctx.fs.writeText(target, args.text)
@@ -274,7 +278,7 @@ async function writeSpec(ctx: Context, args: WriteSpecArgs): Promise<DesignResul
 
 async function writePlan(ctx: Context, args: WritePlanArgs): Promise<DesignResult<{ written: true }>> {
   const cwd = cwdFor(ctx, args.sessionId)
-  if (cwd === undefined) return fail('no-cwd', 'session has no working directory')
+  if (cwd === undefined) return fail('internal', 'session has no working directory')
   try {
     const target = await ctx.fs.resolve(`${DIAGRAMS_DIR}/plan.json`, { cwd })
     await ctx.fs.writeText(target, args.text)
@@ -300,11 +304,11 @@ function resolveRenderScript(): string | null {
 
 async function runRender(ctx: Context, args: RenderArgs): Promise<DesignResult<DesignRenderOutcome>> {
   const cwd = cwdFor(ctx, args.sessionId)
-  if (cwd === undefined) return fail('no-cwd', 'session has no working directory')
+  if (cwd === undefined) return fail('internal', 'session has no working directory')
 
   const script = resolveRenderScript()
   if (script === null) {
-    return fail('not-found', 'dev-plan-assistant render_animated_diagram.py not found on this host')
+    return fail('command-error', 'dev-plan-assistant render_animated_diagram.py not found on this host')
   }
 
   const diagramsAbs = pathJoin(cwd, DIAGRAMS_DIR)
@@ -340,9 +344,6 @@ async function runRender(ctx: Context, args: RenderArgs): Promise<DesignResult<D
     stderr: stderrChunks.join('\n'),
     timedOut,
   }
-  if (lastExit !== 0) {
-    return { ok: false, error: { code: 'render-failed', message: 'render command exited non-zero', details: outcome } }
-  }
   return ok(outcome)
 }
 
@@ -366,9 +367,9 @@ export function apply(ctx: Context): void {
           if (endpoint === 'render') {
             return await runRender(ctx, parseArgs<RenderArgs>(payload))
           }
-          return { ok: false, error: { code: 'bad-request', message: `unknown method: ${endpoint}` } }
+          return { ok: false, error: { code: 'bad-request', message: `unknown method: ${endpoint}`, details: { issues: [] } } }
         } catch (error) {
-          return { ok: false, error: { code: 'internal', message: error instanceof Error ? error.message : String(error) } }
+          return { ok: false, error: { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} } }
         }
       },
       { authority: 'trusted-host' },

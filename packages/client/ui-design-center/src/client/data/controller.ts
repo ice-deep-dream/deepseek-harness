@@ -139,23 +139,18 @@ export class DesignCenterController {
     try {
       result = await this.call<DesignRenderOutcome>('render', { sessionId, targets })
     } catch (error) {
-      if (generation !== this.generation) return { ok: false, error: { code: 'internal', message: String(error) } }
+      if (generation !== this.generation) return { ok: false, error: { code: 'internal', message: String(error), details: {} } }
       const message = error instanceof Error ? error.message : String(error)
       this.store.update((d) => { d.status = 'ready'; d.error = message })
-      return { ok: false, error: { code: 'internal', message } }
+      return { ok: false, error: { code: 'internal', message, details: {} } }
     }
     if (generation !== this.generation) return result
-    if (!result.ok) {
-      const message = result.error.message
-      const details = result.error.code === 'render-failed' ? result.error.details : null
-      this.store.update((d) => {
-        d.status = 'ready'
-        d.error = message
-        if (details) d.renderOutput = details
-      })
-      return result
-    }
-    this.store.update((d) => { d.status = 'ready'; d.renderOutput = result.value })
+    this.store.update((d) => {
+      d.status = 'ready'
+      d.renderOutput = result.ok ? result.value : null
+      if (!result.ok) d.error = result.error.message
+      else if (result.value.exitCode !== 0) d.error = result.value.stderr || 'render command exited non-zero'
+    })
     await this.load(sessionId, true)
     return result
   }
