@@ -338,7 +338,7 @@ async function runRender(ctx: Context, args: RenderArgs): Promise<DesignResult<D
     const safe = name.replace(/[^a-zA-Z0-9._-]/g, '')
     if (!safe) continue
     const specPath = pathJoin(diagramsAbs, `${safe}.json`)
-    const command = `python -X utf8 "${script}" --spec "${specPath}" --outdir "${diagramsAbs}" --basename "${safe}" --formats png,svg --style paper --check`
+    const command = `python -X utf8 "${script}" --spec "${specPath}" --outdir "${diagramsAbs}" --basename "${safe}" --formats png,svg --style codex --check`
     const shellSpec = ctx.shell.resolve({ command, workdir: cwd, timeoutMs: 120000 })
     const result = await ctx.shell.run(shellSpec)
     stdoutChunks.push(`### ${safe}\n${result.stdout}`)

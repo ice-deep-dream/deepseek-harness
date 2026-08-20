@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PropsLocale, InjectFace, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { DesignCenterController } from './data/controller.ts'
 import type { NS as DesignCenterNS } from './locales.ts'
@@ -92,33 +92,16 @@ function DiagramVersionFooter(props: { diagram: DesignDiagram }): React.ReactEle
 
 function DiagramCard(props: {
   diagram: DesignDiagram
-  t: TranslateNS<typeof DesignCenterNS>
   draft: string | undefined
   onEdit: (text: string) => void
-  onSave: () => void
-  onCancel: () => void
-  showTitle?: boolean
 }): React.ReactElement {
-  const { diagram, t, draft, onEdit, onSave, onCancel, showTitle = true } = props
+  const { diagram, draft, onEdit } = props
   const title = diagram.title || diagram.id
   const editing = draft !== undefined
   const svgMissing = diagram.svg === null
 
   return (
     <div className={styles.diagramCard}>
-      <div className={styles.diagramHeader}>
-        {showTitle ? <span className={styles.diagramTitle}>{title}</span> : <span />}
-        {!editing ? (
-          <Button size="sm" variant="ghost" onClick={() => onEdit(diagram.specText)}>
-            {t('toolbar.edit')}
-          </Button>
-        ) : (
-          <div className={styles.editorActions}>
-            <Button size="sm" variant="primary" onClick={onSave}>{t('toolbar.save')}</Button>
-            <Button size="sm" variant="ghost" onClick={onCancel}>{t('toolbar.cancel')}</Button>
-          </div>
-        )}
-      </div>
       {editing ? (
         <textarea
           className={styles.editor}
@@ -397,6 +380,29 @@ export function DesignCenterView(props: DesignCenterViewProps): React.ReactEleme
 
   const activeFlow = selectedFlow ? flows.find(f => f.id === selectedFlow) : undefined
 
+  const activeDiagram = subTab === 'architecture'
+    ? architecture
+    : subTab === 'modules'
+      ? modules
+      : subTab === 'flows'
+        ? activeFlow
+        : undefined
+  const activeDraft = activeDiagram ? state.drafts[activeDiagram.id] : undefined
+  const activeTitle = activeDiagram?.title || activeDiagram?.id || ''
+  const saveDiagram = (d: DesignDiagram) => {
+    void controller.saveSpec(sessionId as SessionId, d.id).then((ok) => {
+      if (ok) return controller.load(sessionId as SessionId, true)
+    })
+  }
+  const savePlan = () => {
+    void controller.savePlan(sessionId as SessionId).then((ok) => {
+      if (ok) {
+        setEditingPlan(false)
+        return controller.load(sessionId as SessionId, true)
+      }
+    })
+  }
+
   return (
     <div className={styles.designCenter}>
       <div className={styles.header}>
@@ -411,6 +417,40 @@ export function DesignCenterView(props: DesignCenterViewProps): React.ReactEleme
               {tab.label}
             </button>
           ))}
+        </div>
+        <div className={styles.headerTitle}>
+          {activeDiagram ? (
+            <>
+              <span className={styles.diagramTitle}>{activeTitle}</span>
+              {activeDraft === undefined ? (
+                <Button size="sm" variant="ghost" onClick={() => controller.updateDraft(activeDiagram.id, activeDiagram.specText)}>
+                  {t('toolbar.edit')}
+                </Button>
+              ) : (
+                <div className={styles.editorActions}>
+                  <Button size="sm" variant="primary" onClick={() => saveDiagram(activeDiagram)}>{t('toolbar.save')}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => controller.clearDraft(activeDiagram.id)}>{t('toolbar.cancel')}</Button>
+                </div>
+              )}
+            </>
+          ) : subTab === 'plan' && board?.plan ? (
+            <>
+              <span className={styles.planHeadTitle}>
+                开发计划 · v{board.plan.version ?? '1.0.0'}
+                {board.plan.updatedAt ? ` · 更新于 ${formatDateTime(board.plan.updatedAt)}` : ''}
+              </span>
+              {!editingPlan ? (
+                <Button size="sm" variant="ghost" onClick={() => { controller.updatePlanDraft(board.plan?.text ?? ''); setEditingPlan(true) }}>
+                  {t('toolbar.edit')}
+                </Button>
+              ) : (
+                <div className={styles.editorActions}>
+                  <Button size="sm" variant="primary" onClick={savePlan}>{t('toolbar.save')}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { controller.clearPlanDraft(); setEditingPlan(false) }}>{t('toolbar.cancel')}</Button>
+                </div>
+              )}
+            </>
+          ) : null}
         </div>
         <div className={styles.headerActions}>
           <Button size="sm" variant="ghost" disabled={busy} onClick={() => void controller.load(sessionId as SessionId, true)}>
@@ -445,15 +485,8 @@ export function DesignCenterView(props: DesignCenterViewProps): React.ReactEleme
           return (
             <DiagramCard
               diagram={diagram}
-              t={t}
               draft={draft}
               onEdit={text => controller.updateDraft(diagram.id, text)}
-              onSave={() => {
-                void controller.saveSpec(sessionId as SessionId, diagram.id).then((ok) => {
-                  if (ok) return controller.load(sessionId as SessionId, true)
-                })
-              }}
-              onCancel={() => controller.clearDraft(diagram.id)}
             />
           )
         })() : null}
@@ -466,16 +499,8 @@ export function DesignCenterView(props: DesignCenterViewProps): React.ReactEleme
                 <DiagramCard
                   key={activeFlow.id}
                   diagram={activeFlow}
-                  t={t}
                   draft={state.drafts[activeFlow.id]}
                   onEdit={text => controller.updateDraft(activeFlow.id, text)}
-                  onSave={() => {
-                    void controller.saveSpec(sessionId as SessionId, activeFlow.id).then((ok) => {
-                      if (ok) return controller.load(sessionId as SessionId, true)
-                    })
-                  }}
-                  onCancel={() => controller.clearDraft(activeFlow.id)}
-                  showTitle={false}
                 />
               </div>
             </div>
@@ -491,29 +516,6 @@ export function DesignCenterView(props: DesignCenterViewProps): React.ReactEleme
           }
           return (
             <div className={styles.planCard}>
-              <div className={styles.diagramHeader}>
-                <span className={styles.planHeadTitle}>
-                  开发计划 · v{plan.version ?? '1.0.0'}
-                  {plan.updatedAt ? ` · 更新于 ${formatDateTime(plan.updatedAt)}` : ''}
-                </span>
-                {!editingPlan ? (
-                  <Button size="sm" variant="ghost" onClick={() => { controller.updatePlanDraft(plan.text); setEditingPlan(true) }}>
-                    {t('toolbar.edit')}
-                  </Button>
-                ) : (
-                  <div className={styles.editorActions}>
-                    <Button size="sm" variant="primary" onClick={() => {
-                      void controller.savePlan(sessionId as SessionId).then((ok) => {
-                        if (ok) {
-                          setEditingPlan(false)
-                          return controller.load(sessionId as SessionId, true)
-                        }
-                      })
-                    }}>{t('toolbar.save')}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => { controller.clearPlanDraft(); setEditingPlan(false) }}>{t('toolbar.cancel')}</Button>
-                  </div>
-                )}
-              </div>
               {editingPlan ? (
                 <textarea
                   className={styles.editor}
